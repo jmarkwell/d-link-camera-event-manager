@@ -1,6 +1,6 @@
 /**
  *  D-Link Camera Event Manager
- *  Build 2018061801
+ *  Build 2020012801
  *
  *  Adapted from Ben Lebson's (GitHub: blebson) Smart Security Camera SmartApp that is designed to work with his D-Link
  *  series of device handlers.
@@ -18,6 +18,9 @@
  *
  *  ChangeLog:
  *      
+ *      20200128
+ *          01: Removed state.positionState as PTZPos can now be accessed as a device attribute.
+ *
  *      20180618
  *          01: moveLock will no longer extend motion locking for the position it is currently in.
  *
@@ -157,7 +160,6 @@ def installed() {
 }
 
 def updated() {
-    // clear the cruft
     state.clear()
     
     goHome()
@@ -182,9 +184,25 @@ def subscribeToEvents() {
 def eventHandler(evt) {
     def moveLockTime = camera.currentValue("moveLockTime") ?: 0
     
+    def PTZPos = null
+    switch ( camera.currentValue("PTZPos") ) {
+        case "home":
+            PTZPos = 1
+            break
+        case "presetOne":
+            PTZPos = 1
+            break
+        case "presetTwo":
+            PTZPos = 2
+            break
+        case "presetThree":
+            PTZPos = 3
+            break
+    }
+    
     if (debug) { log.debug "$evt.name: $evt.value" }
     
-    // new events will modify the timeframe
+    // New events will modify the time frame of the following scheduled events.
     unschedule(goHome)
     unschedule(videoOff)
     
@@ -195,7 +213,7 @@ def eventHandler(evt) {
         }
         
         if (moveEnabled) {
-            if ( (now() > moveLockTime) && (state.positionState != presetNum) ) {
+            if ( (now() > moveLockTime) && (PTZPos != presetNum) ) {
                 log.debug "Moving to preset $presetNum. ($evt.name: $evt.value)"
                 camera.presetCommand(presetNum)
                 
@@ -204,7 +222,7 @@ def eventHandler(evt) {
                 
                 moveDelayOn()
             }
-            else if (state.positionState == presetNum) {
+            else if (PTZPos == presetNum) {
                 // Enabling the following block will extend moveLock time periods when events (like a motion detection) take place.
                 // if (now() <= moveLockTime) {
                     // if (debug) { log.debug "Setting $motionDuration second movement request lockout. (rescheduled) ($evt.name: $evt.value)" }
@@ -227,7 +245,7 @@ def eventHandler(evt) {
             runIn(motionDuration, videoOff)
         }
         
-        if ( (moveEnabled) && (returnHome) && (state.positionState != 1) ) {
+        if ( (moveEnabled) && (returnHome) && (PTZPos != 1) ) {
             if (debug) { log.debug "Going home in $motionDuration seconds. ($evt.name: $evt.value)" }
             runIn(motionDuration, goHome)
         }
@@ -242,7 +260,7 @@ def eventHandler(evt) {
         }
         
         if (moveEnabled) {
-            if ( (now() > moveLockTime) && (state.positionState != presetNum) ) {
+            if ( (now() > moveLockTime) && (PTZPos != presetNum) ) {
                 log.debug "Moving to preset $presetNum. ($evt.name: $evt.value)"
                 camera.presetCommand(presetNum)
                 
@@ -256,7 +274,7 @@ def eventHandler(evt) {
                     runIn(nonMotionDuration, goHome)
                 }
             }
-            else if (state.positionState == presetNum) { // if camera is in preset position
+            else if (PTZPos == presetNum) { // if camera is in preset position
                 // Enabling the following block will extend moveLock time periods when events (like a motion detection) take place.
                 // if (now() <= moveLockTime) {
                     // if (debug) { log.debug "Setting $motionDuration second movement request lockout. (rescheduled) ($evt.name: $evt.value)" }
@@ -268,7 +286,7 @@ def eventHandler(evt) {
                 
                 snap()
                 
-                if ( (returnHome) && (state.positionState != 1) ) { // if camera is not in home position
+                if ( (returnHome) && (PTZPos != 1) ) { // if camera is not in home position
                     if (debug) { log.debug "Going home in $nonMotionDuration seconds. (rescheduled) ($evt.name: $evt.value)" }
                     // goHome() unscheduled at start of function
                     runIn(nonMotionDuration, goHome)
@@ -288,26 +306,25 @@ def eventHandler(evt) {
 def positionHandler(evt) {
     // log.debug "positionHandler: [$evt.name: $evt.value]"
     
-    // this particular evt.value is also known as camera.currentValue("PTZPos")
-    switch (evt.value) {
-        case "home":
-            state.positionState = 1
-            break
-        case "presetOne":
-            state.positionState = 1
-            break
-        case "presetTwo":
-            state.positionState = 2
-            break
-        case "presetThree":
-            state.positionState = 3
-            break
-        default:
-            state.positionState = null
-            break
+    if (debug) {
+        switch ( camera.currentValue("PTZPos") ) {
+            case "home":
+                log.debug "The camera has moved to preset 1."
+                break
+            case "presetOne":
+                log.debug "The camera has moved to preset 1."
+                break
+            case "presetTwo":
+                log.debug "The camera has moved to preset 2."
+                break
+            case "presetThree":
+                log.debug "The camera has moved to preset 3."
+                break
+            default:
+                log.debug "The camera has moved to a non-preset position."
+                break
+        }
     }
-    
-    if (debug) { log.debug "The camera has moved to preset ${state.positionState}." }
     
     if (state.moveDelay) {
         state.moveDelay = false
@@ -330,7 +347,23 @@ def sendNotification() {
 }
 
 def snap() {
-    if ( (takePhoto) && ( (location.mode != "Home") || (!burstLimit) || ( (location.mode == "Home") && (burstLimit) && (now() > state.photoLockTime) ) ) && (state.positionState == presetNum) ) {
+    def PTZPos = null
+    switch ( camera.currentValue("PTZPos") ) {
+        case "home":
+            PTZPos = 1
+            break
+        case "presetOne":
+            PTZPos = 1
+            break
+        case "presetTwo":
+            PTZPos = 2
+            break
+        case "presetThree":
+            PTZPos = 3
+            break
+    }
+    
+    if ( (takePhoto) && ( (location.mode != "Home") || (!burstLimit) || ( (location.mode == "Home") && (burstLimit) && (now() > state.photoLockTime) ) ) && (PTZPos == presetNum) ) {
         photoLockOn()
         
         log.debug "Taking ${burst} photo(s) with a 8 second delay."
@@ -347,7 +380,8 @@ def videoOff() {
 }
 
 def goHome() {
-    if (state.positionState != 1) {
+    def PTZPos = camera.currentValue("PTZPos")
+    if ( (PTZPos != "presetOne") && (PTZPos != "home") ) {
         log.debug "Moving to home position."
         camera.home()
     }
@@ -367,8 +401,8 @@ def moveLockOn() {
     }
 }
 
-// photoLock is by design a lock local to each instance of D-Link Camera Event Manager
-// this allows events from other instances to trigger a photo if allowed by their own independent locks
+// photoLock is by design a lock local to each instance of D-Link Camera Event Manager.
+// This allows events from other instances to trigger a photo if allowed by their own independent locks.
 def photoLockOn() {
     if ( (location.mode == "Home") && (burstLimit) ) {
         if (debug) { log.debug "Setting $burstLimit minute photo request lockout. (location.mode: $location.mode)" }
