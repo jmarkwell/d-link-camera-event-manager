@@ -1,6 +1,6 @@
 /**
  *  D-Link Camera Event Manager
- *  Build 2020020306
+ *  Build 2020020601
  *
  *  Adapted from Ben Lebson's (GitHub: blebson) Smart Security Camera SmartApp that is designed to work with his D-Link series of device
  *  handlers.
@@ -18,6 +18,9 @@
  *
  *  ChangeLog:
  *      
+ *      20200206
+ *          01: Updated snap() function conditionals to reflect that the photoLockTime state variable is now being used in non-home modes.
+ *
  *      20200203
  *          01: Burst photos will now be executed as scheduled processes.
  *          02: Time delay between burst photo shots is now a user preference.
@@ -378,17 +381,7 @@ def snap() {
             break
     }
     
-    if (
-            (takePhoto) && (PTZPos == presetNum) &&
-            (
-                (location.mode != "Home") || (!burstLimit) ||
-                (
-                    (location.mode == "Home") && (burstLimit) &&
-                    ( !state.photoLockTime || (now() > state.photoLockTime) )
-                )
-            )
-       ) {
-        
+    if ( (takePhoto) && (PTZPos == presetNum) && ( !state.photoLockTime || (now() > state.photoLockTime) ) ) {
         photoLockOn()
         
         cameraTake()
