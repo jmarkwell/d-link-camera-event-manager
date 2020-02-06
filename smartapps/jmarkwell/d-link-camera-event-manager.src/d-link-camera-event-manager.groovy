@@ -1,6 +1,6 @@
 /**
  *  D-Link Camera Event Manager
- *  Build 2020020601
+ *  Build 2020020602
  *
  *  Adapted from Ben Lebson's (GitHub: blebson) Smart Security Camera SmartApp that is designed to work with his D-Link series of device
  *  handlers.
@@ -20,6 +20,8 @@
  *      
  *      20200206
  *          01: Updated snap() function conditionals to reflect that the photoLockTime state variable is now being used in non-home modes.
+ *          02: snap() commands will now be delayed by burstDelay seconds in the case that video recording is enabled to ensure that both
+ *              commands have enough time to process properly.
  *
  *      20200203
  *          01: Burst photos will now be executed as scheduled processes.
@@ -287,7 +289,7 @@ def eventHandler(event) {
                 
                 moveDelayOn()
                 
-                if ( (returnHome) && (presetNum != 1) ) { // if camera is not moving to home position
+                if ( (returnHome) && (presetNum != 1) ) { // Camera is not moving to home position.
                     if (debug) { log.debug "Going home in ${nonMotionDuration} seconds. (${event.name}: ${event.value})" }
                     runIn(nonMotionDuration, goHome)
                 }
@@ -304,7 +306,7 @@ def eventHandler(event) {
                 
                 snap()
                 
-                if ( (returnHome) && (PTZPos != 1) ) { // if camera is not in home position
+                if ( (returnHome) && (PTZPos != 1) ) { // Camera is not in home position.
                     if (debug) { log.debug "Going home in ${nonMotionDuration} seconds. (rescheduled) (${event.name}: ${event.value})" }
                     // goHome() unscheduled at start of function
                     runIn(nonMotionDuration, goHome)
@@ -384,8 +386,12 @@ def snap() {
     if ( (takePhoto) && (PTZPos == presetNum) && ( !state.photoLockTime || (now() > state.photoLockTime) ) ) {
         photoLockOn()
         
-        cameraTake()
-        def photosLeft = (burst - 1)
+        def photosLeft = burst
+        if (!recordVideo) { // Sending record and take commands at the same time can result in command failure.
+            cameraTake()
+            photosLeft = (burst - 1)
+        }
+        
         if (photosLeft > 0) {
             log.debug "Taking ${photosLeft} photo(s) with a ${burstDelay} second delay."
             for (int i in 1..photosLeft) {
